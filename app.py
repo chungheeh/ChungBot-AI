@@ -9,6 +9,12 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', str(uuid.uuid4()))
 
+# 챗봇 역할 정의 (친절하고 간결한 답변)
+INITIAL_HISTORY = [
+    {'role': 'user', 'parts': ["너는 사용자에게 도움을 주는 챗봇 ChungBot이야. 항상 친절하고 간결하게 답변해줘. 사용자가 '안녕'이라고 하면 '안녕하세요! 무엇을 도와드릴까요?' 라고 답해줘."]},
+    {'role': 'model', 'parts': ["네, 알겠습니다! 저는 ChungBot입니다. 사용자님을 친절하고 간결하게 돕겠습니다. '안녕'이라고 하시면 '안녕하세요! 무엇을 도와드릴까요?'라고 인사드릴게요."]}
+]
+
 # Google AI 설정
 try:
     genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
@@ -36,14 +42,25 @@ def chat_endpoint():
     if not user_message:
         return jsonify({"error": "메시지가 없습니다."}), 400
 
-    chat_history = session.get('chat_history', [])
+    # 세션에서 이전 대화 기록 불러오기
+    session_history = session.get('chat_history', [])
+
+    # API 호출 시 사용할 기록 준비 (첫 메시지면 역할 정의 추가)
+    api_call_history = INITIAL_HISTORY + session_history if not session_history else session_history
 
     try:
-        chat_session = model.start_chat(history=chat_history)
+        # 준비된 기록으로 대화 시작 또는 재개
+        chat_session = model.start_chat(history=api_call_history)
         response = chat_session.send_message(user_message)
         bot_response = response.text
 
-        session['chat_history'] = [msg_to_dict(m) for m in chat_session.history]
+        # 실제 대화만 세션 기록에 추가 (역할 정의 부분 제외)
+        user_message_dict = {'role': 'user', 'parts': [user_message]}
+        bot_response_dict = {'role': 'model', 'parts': [bot_response]}
+        session_history.append(user_message_dict)
+        session_history.append(bot_response_dict)
+
+        session['chat_history'] = session_history # 업데이트된 기록 저장
         session.modified = True
 
     except Exception as e:
