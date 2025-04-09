@@ -44,23 +44,38 @@
             chatbox.scrollTop = chatbox.scrollHeight; // Scroll to bottom
         }
 
-        function sendMessage() {
+        async function sendMessage() {
             const message = userInput.value.trim();
             if (message) {
                 addMessage('나', message, 'user');
                 userInput.value = '';
-                // TODO: Send message to backend (app.py) and get response
-                // Simulate bot thinking and response for now
-                addMessage('ChungBot', '생각 중...', 'bot');
-                setTimeout(() => {
-                    // Remove "Thinking..." message - optional
-                     const thinkingMsg = chatbox.lastChild;
-                     if(thinkingMsg.textContent.includes('생각 중...')) {
-                         chatbox.removeChild(thinkingMsg);
-                     }
-                    // Replace with actual response from backend later
-                    addMessage('ChungBot', '죄송합니다. 아직 응답을 생성할 수 없습니다.', 'bot');
-                }, 1500);
+
+                // 백엔드에 메시지 전송 및 응답 받기
+                try {
+                    const response = await fetch('/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ message: message })
+                    });
+
+                    if (!response.ok) {
+                        // 서버 응답 오류 처리
+                        const errorData = await response.json();
+                        console.error('서버 오류:', errorData);
+                        addMessage('ChungBot', `오류: ${errorData.error || '알 수 없는 서버 오류'}`, 'bot');
+                        return; // 오류 발생 시 함수 종료
+                    }
+
+                    const data = await response.json();
+                    addMessage('ChungBot', data.response, 'bot');
+
+                } catch (error) {
+                    // 네트워크 오류 또는 JSON 파싱 오류 처리
+                    console.error('메시지 전송 오류:', error);
+                    addMessage('ChungBot', '죄송합니다. 메시지를 보내는 중 오류가 발생했습니다.', 'bot');
+                }
             }
         }
 
